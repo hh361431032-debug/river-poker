@@ -8,7 +8,10 @@ import ChatRoom from "./components/ChatRoom";
 const SUITS = ["s", "h", "d", "c"];
 const SUIT_SYMBOL = { s: "♠", h: "♥", d: "♦", c: "♣" };
 const SUIT_COLOR = { s: "#1E1A17", h: "#A12F3A", d: "#A12F3A", c: "#1E1A17" };
-const SMALL_BLIND = 10, BIG_BLIND = 20, STARTING_CHIPS = 1000, MIN_PLAYERS = 2, MAX_PLAYERS = 8;\nconst ADMIN_USERNAME = "RiverAdmin"; const ADMIN_PASSWORD = "river2026";
+const SMALL_BLIND = 10, BIG_BLIND = 20, STARTING_CHIPS = 1000, MIN_PLAYERS = 2, MAX_PLAYERS = 8;
+
+const ADMIN_USERNAME = "RiverAdmin";
+const ADMIN_PASSWORD = "river2026";
 const HAND_NAMES = ["高牌", "一对", "两对", "三条", "顺子", "同花", "葫芦", "四条", "同花顺"];
 
 function playSound(type="click"){
