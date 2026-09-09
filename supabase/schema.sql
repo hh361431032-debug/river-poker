@@ -5,6 +5,7 @@ create table if not exists public.poker_users (
   username text primary key check (char_length(username) between 2 and 16),
   password_hash text not null,
   chips integer not null default 1000,
+  avatar_url text,
   created_at timestamptz not null default now()
 );
 
@@ -26,6 +27,8 @@ create table if not exists public.poker_messages (
   created_at timestamptz not null default now()
 );
 
+alter table public.poker_users add column if not exists avatar_url text;
+
 create index if not exists poker_rooms_updated_at_idx on public.poker_rooms(updated_at desc);
 create index if not exists poker_messages_room_created_idx on public.poker_messages(room_code, created_at);
 
@@ -44,6 +47,14 @@ create policy "poker_rooms_public" on public.poker_rooms for all to anon, authen
 drop policy if exists "poker_messages_public" on public.poker_messages;
 create policy "poker_messages_public" on public.poker_messages for all to anon, authenticated using (true) with check (true);
 
--- Realtime
-alter publication supabase_realtime add table public.poker_rooms;
-alter publication supabase_realtime add table public.poker_messages;
+-- Realtime（幂等：重复执行不会因已加入 publication 而失败）
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='poker_rooms') then
+    alter publication supabase_realtime add table public.poker_rooms;
+  end if;
+  if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='poker_messages') then
+    alter publication supabase_realtime add table public.poker_messages;
+  end if;
+end
+$$;

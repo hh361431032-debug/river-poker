@@ -25,11 +25,12 @@ export const storage = {
     if (key === 'poker:users') {
       const { data, error } = await supabase
         .from('poker_users')
-        .select('username,password_hash,chips');
+        .select('username,password_hash,chips,avatar_url');
       if (error) throw error;
       const users = Object.fromEntries((data || []).map(u => [u.username, {
         passwordHash: u.password_hash,
         chips: u.chips,
+        avatarUrl: u.avatar_url,
       }]));
       return { value: JSON.stringify(users) };
     }
@@ -64,6 +65,27 @@ export const storage = {
     return null;
   },
 
+
+  async getUserProfile(username) {
+    const { data, error } = await supabase
+      .from('poker_users')
+      .select('username,avatar_url')
+      .eq('username', username)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? { username: data.username, avatarUrl: data.avatar_url || null } : null;
+  },
+
+  async setUserAvatar(username, avatarUrl) {
+    const { error } = await supabase
+      .from('poker_users')
+      .update({ avatar_url: avatarUrl || null })
+      .eq('username', username);
+    if (error) throw error;
+    notify();
+    return { success: true };
+  },
+
   async set(key, value) {
     if (key === 'poker:session') {
       localStorage.setItem(localKey(key), value);
@@ -77,6 +99,7 @@ export const storage = {
         username,
         password_hash: u.passwordHash,
         chips: Number(u.chips ?? 1000),
+        avatar_url: u.avatarUrl || null,
       }));
       if (rows.length) {
         const { error } = await supabase.from('poker_users').upsert(rows, { onConflict: 'username' });

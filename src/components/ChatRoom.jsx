@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Send, MessageCircle } from 'lucide-react';
 import { supabase } from '../services/supabase';
 
@@ -6,6 +6,7 @@ export default function ChatRoom({ roomCode, username, room }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const messagesRef = useRef(null);
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -61,11 +62,15 @@ export default function ChatRoom({ roomCode, username, room }) {
   }, [roomCode]);
 
   useEffect(() => {
-    if (bottomRef.current) {
-      bottomRef.current.scrollIntoView({
-        behavior: 'smooth',
-      });
-    }
+    // 只滚动聊天列表本身，不要调用 scrollIntoView。
+    // scrollIntoView 会连带把整个游戏页面滚到聊天框，
+    // 尤其在手机浏览器输入时很容易出现“画面被强制往下拉”。
+    const el = messagesRef.current;
+    if (!el) return;
+
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
   }, [messages.length]);
 
   async function send() {
@@ -107,7 +112,7 @@ export default function ChatRoom({ roomCode, username, room }) {
         <span>{room?.players?.length || 0} 人</span>
       </div>
 
-      <div className="chat-messages">
+      <div className="chat-messages" ref={messagesRef}>
         {messages.length === 0 && (
           <div className="chat-empty">
             暂时还没有消息，来当第一个说话的人吧。

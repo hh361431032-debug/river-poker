@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Users, LogOut, Copy, Check, Plus, DoorOpen, RefreshCw, Crown, Trash2, UserX, Shield, Volume2 } from "lucide-react";
+import { Users, LogOut, Copy, Check, Plus, DoorOpen, RefreshCw, Crown, Trash2, UserX, Shield, Volume2, Camera, UserRound } from "lucide-react";
 import { storage } from "./services/storage";
 import { supabase } from "./services/supabase";
 import Dealer from "./components/Dealer";
@@ -13,11 +13,12 @@ const SMALL_BLIND = 10, BIG_BLIND = 20, STARTING_CHIPS = 1000, MIN_PLAYERS = 2, 
 const ADMIN_USERNAME = "RiverAdmin";
 const ADMIN_PASSWORD = "river2026";
 const HAND_NAMES = ["高牌", "一对", "两对", "三条", "顺子", "同花", "葫芦", "四条", "同花顺"];
+const THROW_ITEMS = { egg: { name: "鸡蛋", emoji: "🥚", cost: 10 }, tomato: { name: "番茄", emoji: "🍅", cost: 15 }, brick: { name: "板砖", emoji: "🧱", cost: 30 } };
 
 function playSound(type="click"){
   try{
     const C=window.AudioContext||window.webkitAudioContext, ctx=new C(), o=ctx.createOscillator(), g=ctx.createGain();
-    const map={click:[520,.06],deal:[760,.08],fold:[180,.12],call:[430,.09],win:[660,.22],timeout:[140,.18]};
+    const map={click:[520,.06],deal:[760,.08],fold:[180,.12],call:[430,.09],win:[660,.22],timeout:[140,.18],throw:[250,.16]};
     const [freq,dur]=map[type]||map.click; o.frequency.value=freq; o.type=type==="win"?"sine":"triangle"; g.gain.setValueAtTime(.035,ctx.currentTime); g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+dur); o.connect(g);g.connect(ctx.destination);o.start();o.stop(ctx.currentTime+dur);
   }catch{}
 }
@@ -100,6 +101,68 @@ function applyAction(room,name,action,amount){
   r.turnIndex=nextSeat(r,idx,pl=>pl.inHand&&!pl.folded&&!pl.allIn);r.turnStartedAt=Date.now();return r;
 }
 
+
+function throwItem(room, fromName, targetName, itemKey){
+  const item=THROW_ITEMS[itemKey];
+  if(!item||room.status!=="playing")return room;
+  if(fromName===targetName)return room;
+  const r=deepClone(room),from=r.players.find(p=>p.name===fromName),target=r.players.find(p=>p.name===targetName);
+  if(!from||!target||from.kicked||target.kicked)return room;
+  if(!Number.isFinite(from.chips)||from.chips<item.cost)return room;
+  from.chips-=item.cost;
+  r.effects=Array.isArray(r.effects)?r.effects.slice(-14):[];
+  r.effects.push({id:`${Date.now()}-${Math.random().toString(36).slice(2,7)}`,from:fromName,to:targetName,item:itemKey,emoji:item.emoji,at:Date.now()});
+  r.log=(r.log||[]).slice(-29);
+  r.log.push(`${fromName} 花 ${item.cost} 筹码向 ${targetName} 丢了${item.name} ${item.emoji}`);
+  return r;
+}
+
+function avatarFallback(name){
+  const text=(name||"?").trim();
+  return text.slice(0,2).toUpperCase();
+}
+
+function Avatar({src,name,size=42,className=""}){
+  return src ? <img className={`avatar ${className}`} src={src} alt="" style={{width:size,height:size}} /> : <div className={`avatar avatar-fallback ${className}`} style={{width:size,height:size}}>{avatarFallback(name)}</div>;
+}
+
+function compressAvatar(file){
+  return new Promise((resolve,reject)=>{
+    if(!file||!file.type.startsWith("image/")) return reject(new Error("请选择图片文件"));
+    if(file.size>5*1024*1024) return reject(new Error("图片不能超过 5MB"));
+    const reader=new FileReader();
+    reader.onerror=()=>reject(new Error("图片读取失败"));
+    reader.onload=()=>{
+      const img=new Image();
+      img.onerror=()=>reject(new Error("图片格式无法读取"));
+      img.onload=()=>{
+        const max=256, scale=Math.min(1,max/Math.max(img.width,img.height)), w=Math.max(1,Math.round(img.width*scale)), h=Math.max(1,Math.round(img.height*scale));
+        const canvas=document.createElement("canvas");canvas.width=w;canvas.height=h;const ctx=canvas.getContext("2d");ctx.drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL("image/jpeg",0.82));
+      };
+      img.src=reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function AvatarPicker({avatar,username,onChange,size=42}){
+  const inputRef=useRef(null);
+  const [busy,setBusy]=useState(false),[error,setError]=useState("");
+  const pick=async(e)=>{
+    const file=e.target.files?.[0];e.target.value="";if(!file)return;
+    setError("");setBusy(true);
+    try{const data=await compressAvatar(file);await onChange(data);}catch(err){setError(err.message||"头像设置失败");}finally{setBusy(false);}
+  };
+  return <div className="avatar-picker-wrap">
+    <button type="button" className="avatar-picker" title="更换头像" onClick={()=>inputRef.current?.click()} disabled={busy}>
+      <Avatar src={avatar} name={username} size={size}/><span className="avatar-camera"><Camera size={12}/></span>
+    </button>
+    <input ref={inputRef} type="file" accept="image/*" onChange={pick} hidden/>
+    {error&&<span className="avatar-error">{error}</span>}
+  </div>;
+}
+
 function PlayingCard({card,hidden=false,small=false,delay=0}){
   if(hidden||!card)return <div className={`card ${small?"small":""} back`} style={{animationDelay:`${delay}ms`}} />;
   const color=SUIT_COLOR[card.s];
@@ -113,7 +176,7 @@ function AuthScreen({onLogin}){
   const submit=async()=>{
     setError("");const u=username.trim();if(u.length<2||u.length>16)return setError("用户名需要 2–16 位");if(password.length<4)return setError("密码至少 4 位");
     setBusy(true);try{const res=await storage.get("poker:users");const users=res?JSON.parse(res.value):{};
-      if(mode==="register"){if(users[u]){setError("用户名已被占用");setBusy(false);return;}users[u]={passwordHash:simpleHash(password),chips:STARTING_CHIPS};await storage.set("poker:users",JSON.stringify(users));onLogin(u);}
+      if(mode==="register"){if(users[u]){setError("用户名已被占用");setBusy(false);return;}users[u]={passwordHash:simpleHash(password),chips:STARTING_CHIPS,avatarUrl:null};await storage.set("poker:users",JSON.stringify(users));onLogin(u);}
       else{if(u===ADMIN_USERNAME&&password===ADMIN_PASSWORD){onLogin(u);}else if(!users[u]||users[u].passwordHash!==simpleHash(password)){setError("用户名或密码不正确");setBusy(false);return;}else onLogin(u);}
     }catch{setError("操作失败，请重试");}setBusy(false);
   };
@@ -127,19 +190,19 @@ function AuthScreen({onLogin}){
   </div></div>;
 }
 
-function Lobby({username,onEnterRoom,onLogout}){
+function Lobby({username,avatar,onAvatarChange,onEnterRoom,onLogout}){
   const [rooms,setRooms]=useState([]),[joinCode,setJoinCode]=useState(""),[newRoomName,setNewRoomName]=useState(""),[startingChips,setStartingChips]=useState(1000),[turnSeconds,setTurnSeconds]=useState(30),[error,setError]=useState("");
   const isAdmin=username===ADMIN_USERNAME;
   const refresh=useCallback(async()=>{try{const res=await storage.get("poker:rooms-index");setRooms(res?JSON.parse(res.value).filter(r=>r.status!=="closed"):[]);}catch{}},[]);
   useEffect(()=>{refresh();const channel=supabase.channel("poker-lobby").on("postgres_changes",{event:"*",schema:"public",table:"poker_rooms"},refresh).subscribe();return()=>supabase.removeChannel(channel);},[refresh]);
   const createRoom=async()=>{const chips=Math.max(100,Math.min(100000,Number(startingChips)||1000)),seconds=Math.max(5,Math.min(300,Number(turnSeconds)||30)),code=genRoomCode();
-    const room={code,name:newRoomName.trim()||`${username} 的牌桌`,hostName:username,status:"waiting",stage:"waiting",startingChips:chips,turnSeconds:seconds,players:[{name:username,chips,cards:[],folded:false,allIn:false,bet:0,totalContributed:0,hasActed:false,inHand:false,waitingForNext:false}],dealerIndex:null,turnIndex:null,turnStartedAt:null,deck:[],community:[],pot:0,currentBet:0,minRaise:BIG_BLIND,log:[],handNumber:0};
+    const room={code,name:newRoomName.trim()||`${username} 的牌桌`,hostName:username,status:"waiting",stage:"waiting",startingChips:chips,turnSeconds:seconds,players:[{name:username,avatar:avatar||null,chips,cards:[],folded:false,allIn:false,bet:0,totalContributed:0,hasActed:false,inHand:false,waitingForNext:false}],dealerIndex:null,turnIndex:null,turnStartedAt:null,deck:[],community:[],pot:0,currentBet:0,minRaise:BIG_BLIND,log:[],handNumber:0};
     await storage.set(`poker:room:${code}`,JSON.stringify(room));onEnterRoom(code);};
   const joinRoom=async(raw)=>{setError("");const code=raw.trim().toUpperCase();const res=await storage.get(`poker:room:${code}`);if(!res)return setError("房间不存在");const room=JSON.parse(res.value);
-    if(!room.players.some(p=>p.name===username)){if(room.players.length>=MAX_PLAYERS)return setError("房间已满");const chips=Number(room.startingChips ?? (room.status==="waiting" ? room.players?.[0]?.chips : STARTING_CHIPS)) || STARTING_CHIPS;room.players.push({name:username,chips,cards:[],folded:false,allIn:false,bet:0,totalContributed:0,hasActed:false,inHand:false,waitingForNext:room.status==="playing"});await storage.set(`poker:room:${code}`,JSON.stringify(room));}
+    if(!room.players.some(p=>p.name===username)){if(room.players.length>=MAX_PLAYERS)return setError("房间已满");const chips=Number(room.startingChips ?? (room.status==="waiting" ? room.players?.[0]?.chips : STARTING_CHIPS)) || STARTING_CHIPS;room.players.push({name:username,avatar:avatar||null,chips,cards:[],folded:false,allIn:false,bet:0,totalContributed:0,hasActed:false,inHand:false,waitingForNext:room.status==="playing"});await storage.set(`poker:room:${code}`,JSON.stringify(room));}
     onEnterRoom(code);};
   const deleteRoom=async(code)=>{if(!isAdmin)return;if(!confirm("确定删除这个房间？"))return;await storage.delete(`poker:room:${code}`);refresh();};
-  return <div className="page lobby"><header><div className="brand small-brand"><span>♠</span><h1>河畔牌局</h1></div><div className="user-area">{isAdmin&&<span className="admin-badge"><Shield size={14}/>管理员</span>}{username}<button className="icon" onClick={onLogout}><LogOut size={16}/></button></div></header>
+  return <div className="page lobby"><header><div className="brand small-brand"><span>♠</span><h1>河畔牌局</h1></div><div className="user-area"><AvatarPicker avatar={avatar} username={username} onChange={onAvatarChange} size={34}/>{isAdmin&&<span className="admin-badge"><Shield size={14}/>管理员</span>}<span>{username}</span><button className="icon" onClick={onLogout}><LogOut size={16}/></button></div></header>
     <main className="lobby-grid">
       <section className="panel"><h2>创建新牌桌</h2><input placeholder="桌名（可选）" value={newRoomName} onChange={e=>setNewRoomName(e.target.value)}/><label>每人起始筹码</label><input type="number" min="100" max="100000" value={startingChips} onChange={e=>setStartingChips(e.target.value)}/><label>单次行动倒计时（秒）</label><input type="number" min="5" max="300" value={turnSeconds} onChange={e=>setTurnSeconds(e.target.value)}/><button className="primary full" onClick={()=>{playSound("click");createRoom();}}><Plus size={16}/>新建房间</button></section>
       <section className="panel"><h2>用房间号加入</h2><input placeholder="输入 5 位房间号" maxLength={5} value={joinCode} onChange={e=>setJoinCode(e.target.value)} onKeyDown={e=>e.key==="Enter"&&joinRoom(joinCode)}/><button className="secondary full" onClick={()=>joinRoom(joinCode)}><DoorOpen size={16}/>加入</button></section>
@@ -156,7 +219,7 @@ function WaitingRoom({room,username,onStart,onLeave,onKick}){
   return <div className="wait-wrap"><div className="wait-card"><div className="brand"><span>♠</span><h1>{room.name}</h1></div>
     <div className="code-box">房间号 <b>{room.code}</b><button className="small-button" onClick={copy}>{copied?<Check size={14}/>:<Copy size={14}/>}{copied?"已复制":"复制链接"}</button></div>
     <p className="muted">起始筹码：{room.startingChips||STARTING_CHIPS} · 行动时间：{room.turnSeconds||30} 秒</p>
-    <div className="players-list">{room.players.map(p=><div className="player-tile" key={p.name}><div>{p.name===room.hostName&&<Crown size={14}/>} {p.name}{p.name===username?"（你）":""}{isHost&&p.name!==username&&<button className="kick-btn" onClick={()=>onKick(p.name)}><UserX size={13}/>踢出</button>}</div><small>{p.chips} 筹码{p.waitingForNext?" · 等待下一手":""}</small></div>)}</div>
+    <div className="players-list">{room.players.map(p=><div className="player-tile" key={p.name}><div className="player-tile-main"><Avatar src={p.avatar} name={p.name} size={32}/><span>{p.name===room.hostName&&<Crown size={14}/>} {p.name}{p.name===username?"（你）":""}{isHost&&p.name!==username&&<button className="kick-btn" onClick={()=>onKick(p.name)}><UserX size={13}/>踢出</button>}</span></div><small>{p.chips} 筹码{p.waitingForNext?" · 等待下一手":""}</small></div>)}</div>
     {isHost?<button className="primary full" disabled={room.players.length<MIN_PLAYERS} onClick={()=>{playSound("deal");onStart();}}>{room.players.length>=MIN_PLAYERS?"开始游戏":`至少需要 ${MIN_PLAYERS} 人`}</button>:<p className="muted">等待房主 {room.hostName} 开始游戏…</p>}
     <button className="ghost full" onClick={onLeave}>离开房间</button>
   </div></div>;
@@ -164,23 +227,28 @@ function WaitingRoom({room,username,onStart,onLeave,onKick}){
 
 function seatPosition(i,n){const angle=Math.PI*2*i/n-Math.PI/2,rx=44,ry=40;return{left:`${50+rx*Math.cos(angle)}%`,top:`${50+ry*Math.sin(angle)}%`};}
 
-function GameTable({room,username,onAction,onNextHand,onLeave,onKick}){
-  const [raiseAmt,setRaiseAmt]=useState(room.currentBet+room.minRaise),[dealing,setDealing]=useState(false),[left,setLeft]=useState(room.turnSeconds||30);
+function GameTable({room,username,avatar,onAvatarChange,onAction,onNextHand,onLeave,onKick,onThrow}){
+  const [raiseAmt,setRaiseAmt]=useState(room.currentBet+room.minRaise),[dealing,setDealing]=useState(false),[left,setLeft]=useState(room.turnSeconds||30),[targetName,setTargetName]=useState(null),[effects,setEffects]=useState([]);
   useEffect(()=>setRaiseAmt(room.currentBet+Math.max(room.minRaise,BIG_BLIND)),[room.stage,room.currentBet,room.handNumber]);
   useEffect(()=>{setDealing(true);playSound("deal");const t=setTimeout(()=>setDealing(false),900);return()=>clearTimeout(t);},[room.handNumber,room.stage]);
   const me=room.players.find(p=>p.name===username),isHost=room.hostName===username,myTurn=room.stage!=="handover"&&room.players[room.turnIndex]?.name===username&&me&&!me.folded&&!me.allIn,toCall=me?Math.max(0,room.currentBet-me.bet):0,n=room.players.length,limit=room.turnSeconds||30;
   useEffect(()=>{if(room.stage==="handover"||!room.turnStartedAt)return;const tick=()=>setLeft(Math.max(0,Math.ceil((limit*1000-(Date.now()-room.turnStartedAt))/1000)));tick();const t=setInterval(tick,250);return()=>clearInterval(t);},[room.turnStartedAt,limit,room.stage]);
+  useEffect(()=>{const active=(room.effects||[]).filter(e=>Date.now()-Number(e.at||0)<2400);setEffects(active);if(!active.length)return;const t=setTimeout(()=>setEffects((room.effects||[]).filter(e=>Date.now()-Number(e.at||0)<2400)),2500);return()=>clearTimeout(t);},[room.effects]);
+  const chooseTarget=(name)=>{if(name!==username)setTargetName(targetName===name?null:name);};
+  const sendThrow=(itemKey)=>{if(!targetName)return;const item=THROW_ITEMS[itemKey];if(!item||!me||me.chips<item.cost)return;playSound("throw");onThrow(targetName,itemKey);setTargetName(null);};
   return <div className="game-page">
-    <div className="game-top"><div><b>{room.name}</b> · 第 {room.handNumber} 局 · <span className="stage">{room.stage}</span></div><div className="timer"><Volume2 size={14}/> {room.stage!=="handover"&&`⏱ ${left}/${limit}s`}</div><button className="ghost-small" onClick={onLeave}>离开</button></div>
+    <div className="game-top"><div><b>{room.name}</b> · 第 {room.handNumber} 局 · <span className="stage">{room.stage}</span></div><div className="game-user-tools"><AvatarPicker avatar={avatar} username={username} onChange={onAvatarChange} size={34}/><button className="ghost-small" onClick={onLeave}>离开</button></div></div>
     <div className="game-layout"><main className="table-area"><Dealer room={room} dealing={dealing}/>
       <div className="poker-table"><div className="pot">彩池 {room.pot}{room.stage!=="handover"&&room.currentBet>0?` · 当前注 ${room.currentBet}`:""}</div><div className="community">{room.community.map((c,i)=><PlayingCard key={i} card={c} delay={i*120}/>)}{Array.from({length:5-room.community.length}).map((_,i)=><PlayingCard key={"x"+i} hidden/>)}</div>
-      {room.players.map((p,i)=>{const pos=seatPosition(i,n),turn=room.turnIndex===i&&room.stage!=="handover",meSeat=p.name===username;return <div className={`seat ${turn?"turn":""} ${p.folded?"folded":""}`} style={pos} key={p.name}><div className="seat-name">{i===room.dealerIndex&&<span className="dealer-chip">D</span>}{p.name}{meSeat?"（你）":""}{isHost&&p.name!==username&&<button className="seat-kick" onClick={()=>onKick(p.name)}>×</button>}</div><div className="seat-cards">{p.cards.length?p.cards.map((c,j)=><PlayingCard key={j} card={c} hidden={!meSeat&&room.stage!=="handover"} small delay={j*120}/>):<><PlayingCard hidden small/><PlayingCard hidden small/></>}</div><small>{p.waitingForNext?"等待下一手":p.folded?"已弃牌":p.allIn?"ALL IN":`${p.chips} 筹码`}{p.bet>0?` · ${p.bet}`:""}</small></div>;})}</div>
+      {room.players.map((p,i)=>{const pos=seatPosition(i,n),turn=room.turnIndex===i&&room.stage!=="handover",meSeat=p.name===username,selected=targetName===p.name;return <div className={`seat ${turn?"turn":""} ${p.folded?"folded":""} ${selected?"targeted":""}`} style={pos} key={p.name} onClick={()=>chooseTarget(p.name)}>{turn&&<div className={`seat-timer ${left<=5?"critical":""}`}>⏱ {left}s</div>}<Avatar src={p.avatar} name={p.name} size={38}/><div className="seat-name">{i===room.dealerIndex&&<span className="dealer-chip">D</span>}{p.name}{meSeat?"（你）":""}{isHost&&p.name!==username&&<button className="seat-kick" onClick={(e)=>{e.stopPropagation();onKick(p.name)}}>×</button>}</div><div className="seat-cards">{p.cards.length?p.cards.map((c,j)=><PlayingCard key={j} card={c} hidden={!meSeat&&room.stage!=="handover"} small delay={j*120}/>):<><PlayingCard hidden small/><PlayingCard hidden small/></>}</div><small>{p.waitingForNext?"等待下一手":p.folded?"已弃牌":p.allIn?"ALL IN":`${p.chips} 筹码`}{p.bet>0?` · ${p.bet}`:""}</small>{selected&&<div className="target-badge">已选择</div>}</div>;})}</div>
+      {effects.map(e=>{const a=room.players.findIndex(p=>p.name===e.from),b=room.players.findIndex(p=>p.name===e.to);if(a<0||b<0)return null;const from=seatPosition(a,n),to=seatPosition(b,n);return <div className="throw-projectile" key={e.id} style={{"--x1":from.left,"--y1":from.top,"--x2":to.left,"--y2":to.top}}>{e.emoji}</div>;})}
+      <div className="interaction-panel">{targetName?<><span>目标：<b>{targetName}</b></span><button disabled={!me||me.chips<10} onClick={()=>sendThrow("egg")}>🥚 鸡蛋 ·10</button><button disabled={!me||me.chips<15} onClick={()=>sendThrow("tomato")}>🍅 番茄 ·15</button><button disabled={!me||me.chips<30} onClick={()=>sendThrow("brick")}>🧱 板砖 ·30</button><button className="cancel-throw" onClick={()=>setTargetName(null)}>取消</button></>:<span>点击其他玩家的座位，可以选择他进行互动</span>}</div>
       <div className="game-log">{room.log.slice(-6).map((l,i)=><div key={i}>{l}</div>)}</div>
       {room.stage==="handover"?<div className="actions">{isHost?<button className="primary" onClick={()=>{playSound("deal");onNextHand();}}>开始下一局</button>:<div className="wait-action">等待房主开始下一局…</div>}</div>:
       myTurn?<div className="actions"><button className="danger" onClick={()=>{playSound("fold");onAction("fold")}}>弃牌</button><button className="secondary" onClick={()=>{playSound("call");onAction(toCall===0?"check":"call")}}>{toCall===0?"过牌":`跟注 ${toCall}`}</button><input type="number" value={raiseAmt} min={room.currentBet+room.minRaise} max={me.bet+me.chips} onChange={e=>setRaiseAmt(e.target.value)}/><button className="primary" onClick={()=>{playSound("call");onAction("raise",raiseAmt)}}>加注到</button></div>:<div className="wait-action">{me?.waitingForNext?"你已加入，等待下一手牌…":me?.folded?"你已弃牌，等待本局结束…":me?.allIn?"你已全下，等待其他玩家…":`等待 ${room.players[room.turnIndex]?.name||"…"} 行动…`}</div>}</main><ChatRoom roomCode={room.code} username={username} room={room}/></div></div>;
 }
 
-function RoomController({code,username,onLeaveLobby}){
+function RoomController({code,username,avatar,onAvatarChange,onLeaveLobby}){
   const [room,setRoom]=useState(null),busy=useRef(false);
   const load=useCallback(async()=>{const res=await storage.get(`poker:room:${code}`);if(res)setRoom(JSON.parse(res.value));else onLeaveLobby();},[code,onLeaveLobby]);
   useEffect(()=>{load();const channel=supabase.channel(`poker-room-${code}`).on("postgres_changes",{event:"*",schema:"public",table:"poker_rooms",filter:`code=eq.${code}`},load).subscribe();const fallback=setInterval(load,3000);return()=>{clearInterval(fallback);supabase.removeChannel(channel);};},[load,code]);
@@ -192,15 +260,16 @@ function RoomController({code,username,onLeaveLobby}){
   useEffect(()=>{if(!room||room.hostName!==username||room.stage==="handover"||room.stage==="waiting"||!room.turnStartedAt)return;const ms=(room.turnSeconds||30)*1000-(Date.now()-room.turnStartedAt);if(ms<=0){const t=setTimeout(()=>fresh(r=>{if(r.turnStartedAt===room.turnStartedAt&&r.turnIndex!=null){const p=r.players[r.turnIndex];if(p){r.log.push(`${p.name} 行动超时，自动弃牌`);playSound("timeout");return applyAction(r,p.name,"fold");}}return r;}),100);return()=>clearTimeout(t);}const t=setTimeout(()=>fresh(r=>{const p=r.players[r.turnIndex];if(p){r.log.push(`${p.name} 行动超时，自动弃牌`);return applyAction(r,p.name,"fold");}}),ms+100);return()=>clearTimeout(t);},[room?.turnStartedAt,room?.turnIndex,room?.stage,room?.turnSeconds,room?.hostName,username]);
   if(!room)return <div className="page loading">加载房间中…</div>;
   if(room.status!=="playing"||room.stage==="waiting")return <WaitingRoom room={room} username={username} onStart={()=>fresh(startHand)} onLeave={leave} onKick={kick}/>;
-  return <GameTable room={room} username={username} onAction={(a,v)=>fresh(r=>applyAction(r,username,a,v))} onNextHand={()=>fresh(startHand)} onLeave={leave} onKick={kick}/>;
+  return <GameTable onThrow={(target,item)=>fresh(r=>throwItem(r,username,target,item))} room={room} username={username} avatar={avatar} onAvatarChange={async(data)=>{await onAvatarChange(data);await fresh(r=>{const p=r.players.find(x=>x.name===username);if(p)p.avatar=data;return r;});}} onAction={(a,v)=>fresh(r=>applyAction(r,username,a,v))} onNextHand={()=>fresh(startHand)} onLeave={leave} onKick={kick}/>;
 }
 
 export default function App(){
-  const [username,setUsername]=useState(null),[roomCode,setRoomCode]=useState(null),[checking,setChecking]=useState(true);
-  useEffect(()=>{(async()=>{const res=await storage.get("poker:session");if(res?.value)setUsername(res.value);setChecking(false);})();},[]);
-  const login=async u=>{setUsername(u);await storage.set("poker:session",u);};
-  const logout=async()=>{setUsername(null);setRoomCode(null);await storage.delete("poker:session");};
+  const [username,setUsername]=useState(null),[avatar,setAvatar]=useState(null),[roomCode,setRoomCode]=useState(null),[checking,setChecking]=useState(true);
+  useEffect(()=>{(async()=>{const res=await storage.get("poker:session");if(res?.value){setUsername(res.value);try{const profile=await storage.getUserProfile(res.value);setAvatar(profile?.avatarUrl||null);}catch{setAvatar(null);}}setChecking(false);})();},[]);
+  const login=async u=>{setUsername(u);try{const profile=await storage.getUserProfile(u);setAvatar(profile?.avatarUrl||null);}catch{setAvatar(null);}await storage.set("poker:session",u);};
+  const logout=async()=>{setUsername(null);setAvatar(null);setRoomCode(null);await storage.delete("poker:session");};
   useEffect(()=>{const code=new URLSearchParams(location.search).get("room");if(username&&code)setRoomCode(code.trim().toUpperCase());},[username]);
   if(checking)return <div className="page loading">正在进入河畔牌局…</div>;
-  return <div className="app">{!username?<AuthScreen onLogin={login}/>:roomCode?<RoomController code={roomCode} username={username} onLeaveLobby={()=>setRoomCode(null)}/>:<Lobby username={username} onEnterRoom={setRoomCode} onLogout={logout}/>}</div>;
+  const saveAvatar=async(data)=>{await storage.setUserAvatar(username,data);setAvatar(data);};
+  return <div className="app">{!username?<AuthScreen onLogin={login}/>:roomCode?<RoomController code={roomCode} username={username} avatar={avatar} onAvatarChange={saveAvatar} onLeaveLobby={()=>setRoomCode(null)}/>:<Lobby username={username} avatar={avatar} onAvatarChange={saveAvatar} onEnterRoom={setRoomCode} onLogout={logout}/>}</div>;
 }
