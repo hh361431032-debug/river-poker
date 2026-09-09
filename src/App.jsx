@@ -85,7 +85,7 @@ function advanceStage(r){
   else if(r.stage==="turn"){resetBets(r);dealCommunity(r,1);r.stage="river";}
   else if(r.stage==="river"){distributePots(r);return r;}
   if(contestants(r).length<2)return advanceStage(r);
-  r.turnIndex=nextSeat(r,r.dealerIndex,p=>p.inHand&&!p.folded&&!p.allIn);return r;
+  r.turnIndex=nextSeat(r,r.dealerIndex,p=>p.inHand&&!p.folded&&!p.allIn);r.turnStartedAt=Date.now();return r;
 }
 function applyAction(room,name,action,amount){
   const idx=room.players.findIndex(p=>p.name===name);if(idx<0||idx!==room.turnIndex)return room;const src=room.players[idx];if(!src.inHand||src.folded||src.allIn)return room;
@@ -123,7 +123,7 @@ function AuthScreen({onLogin}){
     <input placeholder="用户名" value={username} maxLength={16} onChange={e=>setUsername(e.target.value)}/>
     <input placeholder="密码" type="password" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()}/>
     {error&&<div className="error">{error}</div>}<button className="primary full" disabled={busy} onClick={submit}>{busy?"处理中…":mode==="login"?"登录":"注册并登录"}</button>
-    <small>当前版本使用浏览器本地存储，仅供本机测试。联网版后续接入云端数据库。</small>
+    <small>联网版：房间状态、玩家和聊天通过 Supabase 云端同步。</small>
   </div></div>;
 }
 
@@ -136,7 +136,7 @@ function Lobby({username,onEnterRoom,onLogout}){
     const room={code,name:newRoomName.trim()||`${username} 的牌桌`,hostName:username,status:"waiting",stage:"waiting",startingChips:chips,turnSeconds:seconds,players:[{name:username,chips,cards:[],folded:false,allIn:false,bet:0,totalContributed:0,hasActed:false,inHand:false,waitingForNext:false}],dealerIndex:null,turnIndex:null,turnStartedAt:null,deck:[],community:[],pot:0,currentBet:0,minRaise:BIG_BLIND,log:[],handNumber:0};
     await storage.set(`poker:room:${code}`,JSON.stringify(room));onEnterRoom(code);};
   const joinRoom=async(raw)=>{setError("");const code=raw.trim().toUpperCase();const res=await storage.get(`poker:room:${code}`);if(!res)return setError("房间不存在");const room=JSON.parse(res.value);
-    if(!room.players.some(p=>p.name===username)){if(room.players.length>=MAX_PLAYERS)return setError("房间已满");const chips=room.startingChips||STARTING_CHIPS;room.players.push({name:username,chips,cards:[],folded:false,allIn:false,bet:0,totalContributed:0,hasActed:false,inHand:false,waitingForNext:room.status==="playing"});await storage.set(`poker:room:${code}`,JSON.stringify(room));}
+    if(!room.players.some(p=>p.name===username)){if(room.players.length>=MAX_PLAYERS)return setError("房间已满");const chips=Number(room.startingChips ?? (room.status==="waiting" ? room.players?.[0]?.chips : STARTING_CHIPS)) || STARTING_CHIPS;room.players.push({name:username,chips,cards:[],folded:false,allIn:false,bet:0,totalContributed:0,hasActed:false,inHand:false,waitingForNext:room.status==="playing"});await storage.set(`poker:room:${code}`,JSON.stringify(room));}
     onEnterRoom(code);};
   const deleteRoom=async(code)=>{if(!isAdmin)return;if(!confirm("确定删除这个房间？"))return;await storage.delete(`poker:room:${code}`);refresh();};
   return <div className="page lobby"><header><div className="brand small-brand"><span>♠</span><h1>河畔牌局</h1></div><div className="user-area">{isAdmin&&<span className="admin-badge"><Shield size={14}/>管理员</span>}{username}<button className="icon" onClick={onLogout}><LogOut size={16}/></button></div></header>
@@ -189,7 +189,7 @@ function RoomController({code,username,onLeaveLobby}){
   const kick=(name)=>fresh(r=>{if(r.hostName!==username||name===username)return r;const p=r.players.find(x=>x.name===name);if(!p)return r;if(r.status==="playing"&&p.inHand&&!p.folded){p.folded=true;p.hasActed=true;p.kicked=true;r.log.push(`${name} 被房主踢出，本局按弃牌处理`);}else r.players=r.players.filter(x=>x.name!==name);return r;});
   const leave=async()=>{if(room){const r=deepClone(room);r.players=r.players.filter(p=>p.name!==username);if(!r.players.length)await storage.delete(`poker:room:${code}`);else{if(r.hostName===username)r.hostName=r.players[0].name;await save(r);}}onLeaveLobby();};
   // host-authoritative timeout: only current player auto-folds; any client may attempt but server state is refreshed first.
-  useEffect(()=>{if(!room||room.stage==="handover"||room.stage==="waiting"||!room.turnStartedAt)return;const ms=(room.turnSeconds||30)*1000-(Date.now()-room.turnStartedAt);if(ms<=0){const t=setTimeout(()=>fresh(r=>{if(r.turnStartedAt===room.turnStartedAt&&r.turnIndex!=null){const p=r.players[r.turnIndex];if(p){r.log.push(`${p.name} 行动超时，自动弃牌`);playSound("timeout");return applyAction(r,p.name,"fold");}}return r;}),100);return()=>clearTimeout(t);}const t=setTimeout(()=>fresh(r=>{const p=r.players[r.turnIndex];if(p){r.log.push(`${p.name} 行动超时，自动弃牌`);return applyAction(r,p.name,"fold");}}),ms+100);return()=>clearTimeout(t);},[room?.turnStartedAt,room?.turnIndex,room?.stage,room?.turnSeconds]);
+  useEffect(()=>{if(!room||room.hostName!==username||room.stage==="handover"||room.stage==="waiting"||!room.turnStartedAt)return;const ms=(room.turnSeconds||30)*1000-(Date.now()-room.turnStartedAt);if(ms<=0){const t=setTimeout(()=>fresh(r=>{if(r.turnStartedAt===room.turnStartedAt&&r.turnIndex!=null){const p=r.players[r.turnIndex];if(p){r.log.push(`${p.name} 行动超时，自动弃牌`);playSound("timeout");return applyAction(r,p.name,"fold");}}return r;}),100);return()=>clearTimeout(t);}const t=setTimeout(()=>fresh(r=>{const p=r.players[r.turnIndex];if(p){r.log.push(`${p.name} 行动超时，自动弃牌`);return applyAction(r,p.name,"fold");}}),ms+100);return()=>clearTimeout(t);},[room?.turnStartedAt,room?.turnIndex,room?.stage,room?.turnSeconds,room?.hostName,username]);
   if(!room)return <div className="page loading">加载房间中…</div>;
   if(room.status!=="playing"||room.stage==="waiting")return <WaitingRoom room={room} username={username} onStart={()=>fresh(startHand)} onLeave={leave} onKick={kick}/>;
   return <GameTable room={room} username={username} onAction={(a,v)=>fresh(r=>applyAction(r,username,a,v))} onNextHand={()=>fresh(startHand)} onLeave={leave} onKick={kick}/>;
