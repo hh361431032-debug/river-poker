@@ -70,19 +70,6 @@ function columnsFor(table, select) {
   if (!allowed) throw new Error('unknown table');
   return select.split(',').map(x => x.trim()).filter(x => allowed.has(x)).join(',') || '*';
 }
-function buildWhere(url, table) {
-  const clauses = [];
-  const values = [];
-  for (const [key, value] of url.searchParams) {
-    if (key === 'eq') {
-      const i = value.indexOf(':'); if (i > 0) { clauses.push(`${safeColumn(table, value.slice(0, i))} = ?`); values.push(value.slice(i + 1)); }
-    }
-    if (key === 'neq') {
-      const i = value.indexOf(':'); if (i > 0) { clauses.push(`${safeColumn(table, value.slice(0, i))} != ?`); values.push(value.slice(i + 1)); }
-    }
-  }
-  return { sql: clauses.length ? ` WHERE ${clauses.join(' AND ')}` : '', values };
-}
 function safeColumn(table, column) {
   const allowed = {
     poker_users: ['username','password_hash','chips','avatar_url','dealer_image_url'],
@@ -91,6 +78,21 @@ function safeColumn(table, column) {
   }[table];
   if (!allowed?.includes(column)) throw new Error('invalid column');
   return column;
+}
+function buildWhere(url, table) {
+  const clauses = [];
+  const values = [];
+  for (const [key, value] of url.searchParams) {
+    if (key === 'eq' || key === 'neq') {
+      const i = value.indexOf(':');
+      if (i > 0) {
+        const column = safeColumn(table, value.slice(0, i));
+        clauses.push(`${column} ${key === 'eq' ? '=' : '!='} ?`);
+        values.push(value.slice(i + 1));
+      }
+    }
+  }
+  return { sql: clauses.length ? ` WHERE ${clauses.join(' AND ')}` : '', values };
 }
 function getRows(table, url) {
   const { sql: where, values } = buildWhere(url, table);
@@ -121,7 +123,8 @@ async function handleApi(req, res, url) {
     req.on('close', () => { clearInterval(keepAlive); sseClients.delete(res); });
     return;
   }
-  const table = parts[1];
+  if (parts[1] !== 'db') return sendJson(res, 404, { error: 'unknown api route' });
+  const table = parts[2];
   if (!tableExists(table)) return sendJson(res, 404, { error: 'unknown table' });
   try {
     if (req.method === 'GET') {
@@ -132,8 +135,11 @@ async function handleApi(req, res, url) {
     const { sql: where, values } = buildWhere(url, table);
     if (req.method === 'POST') {
       const rows = Array.isArray(body) ? body : [body];
+      const isUpsert = rows.some(row => row.__upsert);
       const results = [];
-      for (const row of rows) {
+      for (const inputRow of rows) {
+        const row = { ...inputRow };
+        delete row.__upsert;
         const keys = Object.keys(row);
         if (table === 'poker_messages') {
           const now = new Date().toISOString();
@@ -141,17 +147,17 @@ async function handleApi(req, res, url) {
           const info = stmt.run(row.room_code, row.username, row.text, row.created_at || now);
           const saved = db.prepare('SELECT * FROM poker_messages WHERE id=?').get(info.lastInsertRowid);
           results.push(saved); broadcast(table, 'INSERT', saved);
-        } else if (body.__upsert) {
+        } else if (isUpsert) {
           const conflict = table === 'poker_users' ? 'username' : 'code';
           const vals = keys.map(k => k === 'state' && typeof row[k] !== 'string' ? JSON.stringify(row[k]) : row[k]);
           const updateKeys = keys.filter(k => k !== conflict);
-          const updateSql = updateKeys.map(k => `${k}=excluded.${k}`).join(',');
-          db.prepare(`INSERT INTO ${table}(${keys.join(',')}) VALUES(${keys.map(()=>'?').join(',')}) ON CONFLICT(${conflict}) DO UPDATE SET ${updateSql}`).run(...vals);
-          const saved = db.prepare(`SELECT * FROM ${table} WHERE ${conflict}=?`).get(row[conflict]);
+          const updateSql = updateKeys.map(k => `${safeColumn(table, k)}=excluded.${safeColumn(table, k)}`).join(',');
+          db.prepare(`INSERT INTO ${table}(${keys.map(k => safeColumn(table,k)).join(',')}) VALUES(${keys.map(()=>'?').join(',')}) ON CONFLICT(${safeColumn(table, conflict)}) DO UPDATE SET ${updateSql}`).run(...vals);
+          const saved = db.prepare(`SELECT * FROM ${table} WHERE ${safeColumn(table, conflict)}=?`).get(row[conflict]);
           results.push(publicRow(table, saved)); broadcast(table, 'UPSERT', publicRow(table, saved));
         } else {
           const vals = keys.map(k => k === 'state' && typeof row[k] !== 'string' ? JSON.stringify(row[k]) : row[k]);
-          db.prepare(`INSERT INTO ${table}(${keys.join(',')}) VALUES(${keys.map(()=>'?').join(',')})`).run(...vals);
+          db.prepare(`INSERT INTO ${table}(${keys.map(k => safeColumn(table,k)).join(',')}) VALUES(${keys.map(()=>'?').join(',')})`).run(...vals);
           const saved = table === 'poker_messages' ? db.prepare('SELECT * FROM poker_messages ORDER BY id DESC LIMIT 1').get() : row;
           results.push(publicRow(table, saved)); broadcast(table, 'INSERT', publicRow(table, saved));
         }
