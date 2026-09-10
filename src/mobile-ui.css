@@ -26,11 +26,8 @@
 .orientation-settings-btn{width:34px;height:34px;border-radius:9px;border:1px solid rgba(213,183,90,.65);background:rgba(20,17,14,.92);color:#d5b75a;display:grid;place-items:center;box-shadow:0 4px 14px rgba(0,0,0,.35);cursor:pointer;padding:0}
 .orientation-settings-btn:active{transform:scale(.96)}
 .orientation-menu{position:absolute;right:0;left:auto;top:40px;width:132px;padding:7px;border-radius:10px;background:rgba(24,20,16,.98);border:1px solid rgba(213,183,90,.55);box-shadow:0 8px 22px rgba(0,0,0,.5)}
-.orientation-title{font-size:10px;color:#aaa08d;padding:3px 6px 6px}
-.orientation-menu button{width:100%;display:flex;align-items:center;gap:7px;border:0;border-radius:7px;background:transparent;color:#eee;padding:8px 7px;font-size:11px;cursor:pointer}
-.orientation-menu button:hover,.orientation-menu button.active{background:rgba(201,162,39,.15);color:#e0c46a}
-.game-title-text{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.game-user-tools{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.orientation-title{font-size:10px;color:#aaa08d;padding:3px 6px 6px}.orientation-menu button{width:100%;display:flex;align-items:center;gap:7px;border:0;border-radius:7px;background:transparent;color:#eee;padding:8px 7px;font-size:11px;cursor:pointer}.orientation-menu button:hover,.orientation-menu button.active{background:rgba(201,162,39,.15);color:#e0c46a}
+.game-title-text{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.game-user-tools{display:flex;align-items:center;gap:6px;flex-shrink:0}
 
 /* Phones default to a normal vertical page. */
 @media(max-width:700px){
@@ -45,11 +42,7 @@
   .community{gap:4px}.community .card{width:42px;height:59px}.pot{top:28%;padding:5px 10px;font-size:9px}.dealer-box{margin:-12px auto -4px;transform:scale(.72)}
   .game-log{margin:6px auto;max-height:118px;min-height:42px;font-size:9px;overflow-y:auto}
   .interaction-panel{margin-top:6px;padding:7px;gap:6px;font-size:10px}.interaction-panel button{padding:7px 9px;font-size:10px;min-height:34px}.actions{margin:7px auto;gap:6px}.actions button{padding:8px 12px;font-size:12px;min-height:38px}.actions input{width:92px;padding:8px 10px;font-size:12px;min-height:38px}
-  /* Restore the tall chat panel in portrait mode: 25% taller than the old 430px height. */
-  .chat-panel{height:538px;min-height:538px;width:100%;max-width:none;margin:0;border-radius:12px}
-  .chat-messages{min-height:0}
-
-  /* Keep the god view visually like the original dark floating panel. */
+  .chat-panel{height:538px;min-height:538px;width:100%;max-width:none;margin:0;border-radius:12px}.chat-messages{min-height:0}
   .god-view{left:6px;right:6px;bottom:52px;max-height:88vh;padding:9px;background:rgba(17,31,27,.98);border:1px solid rgba(201,162,39,.28);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.55);backdrop-filter:blur(10px)}
   .god-view-head{background:transparent}
   .poker-table .seat[style*="left: 6%"],.poker-table .seat[style*="left: 10%"],.poker-table .seat[style*="left: 11%"],.poker-table .seat[style*="left: 14%"],.poker-table .seat[style*="left: 15%"]{transform:translate(-38%,-50%)}
@@ -60,13 +53,11 @@
   html[data-orientation="landscape"] .game-top{width:100%;max-width:none;margin:0 auto 4px;padding:0 4px}
   html[data-orientation="landscape"] .game-layout{display:flex;flex-direction:column;gap:5px;width:100%;align-items:center}
   html[data-orientation="landscape"] .table-area{width:100%;display:flex;flex-direction:column;align-items:center}
-  /* Smaller table so dealer + table + log can coexist in the visible landscape viewport. */
   html[data-orientation="landscape"] .poker-table{width:min(78vh,820px);max-width:none;aspect-ratio:16/9;margin:0 auto;border-width:5px}
   html[data-orientation="landscape"] .dealer-box{margin:-10px auto -5px;transform:scale(.52)}
   html[data-orientation="landscape"] .game-log{width:min(78vh,820px);max-height:92px;min-height:38px;margin:3px auto;font-size:9px}
   html[data-orientation="landscape"] .interaction-panel{width:min(78vh,820px);margin:3px auto;padding:5px}
   html[data-orientation="landscape"] .actions{width:min(78vh,820px);margin:3px auto}
-  /* Same chat height as portrait mode. */
   html[data-orientation="landscape"] .chat-panel{width:min(78vh,820px);height:538px;min-height:538px;margin:0 auto;border-radius:12px}
   html[data-orientation="landscape"] .god-view{left:10px;right:10px;bottom:50px;max-height:82vh;background:rgba(17,31,27,.98);border:1px solid rgba(201,162,39,.28);box-shadow:0 12px 30px rgba(0,0,0,.55);backdrop-filter:blur(10px)}
   html[data-orientation="landscape"] .poker-table .seat[style*="left: 6%"],html[data-orientation="landscape"] .poker-table .seat[style*="left: 10%"],html[data-orientation="landscape"] .poker-table .seat[style*="left: 11%"],html[data-orientation="landscape"] .poker-table .seat[style*="left: 14%"],html[data-orientation="landscape"] .poker-table .seat[style*="left: 15%"]{transform:translate(-50%,-50%)}
@@ -78,4 +69,16 @@
   html[data-orientation="landscape"] .poker-table{width:78vh;aspect-ratio:16/9}
   html[data-orientation="landscape"] .game-log,html[data-orientation="landscape"] .interaction-panel,html[data-orientation="landscape"] .chat-panel{width:78vh}
   html[data-orientation="landscape"] .chat-panel{height:538px;min-height:538px}
+}
+
+/* Final overrides: exact third-version god-view look, plus easier landscape tapping. */
+.god-view{position:absolute!important;left:7px!important;right:7px!important;bottom:57px!important;z-index:50!important;background:rgba(18,14,11,.98)!important;border:1px solid #d5b75a!important;border-radius:10px!important;padding:9px!important;box-shadow:0 8px 28px rgba(0,0,0,.55)!important;max-height:72vh!important;overflow-y:auto!important;backdrop-filter:none!important}
+.god-view-head{display:flex!important;align-items:center!important;justify-content:space-between!important;margin-bottom:7px!important;color:#d5b75a!important;font-size:12px!important;font-weight:700!important;background:none!important}
+.god-view-head button{background:none!important;border:0!important;color:#aaa!important;cursor:pointer!important;padding:2px!important;display:grid!important;place-items:center!important}
+.god-title{display:flex!important;align-items:center!important;gap:5px!important}.god-section-title{font-size:9px!important;color:#9f9a8c!important;text-transform:none!important;margin:3px 0 5px!important}.god-community{padding:5px 0 8px!important;border-bottom:1px solid rgba(255,255,255,.08)!important}.god-community-cards{display:flex!important;gap:5px!important}.god-card{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:35px!important;height:27px!important;border-radius:4px!important;background:#f5f1e8!important;font-size:13px!important;font-weight:800!important;box-shadow:0 2px 5px rgba(0,0,0,.25)!important}.god-card[style*="#777"]{background:#f5f1e8!important;color:#777!important;border:1px solid #bbb!important}.god-players-title{margin-top:8px!important}.god-player{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:6px!important;padding:6px 2px!important;border-top:1px solid rgba(255,255,255,.06)!important}.god-player-name{color:#eee!important;font-size:10px!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}.god-player-name.folded{color:#777!important}.god-player-cards{display:flex!important;gap:3px!important;flex-shrink:0!important}.god-player-cards .god-card{width:33px!important;height:25px!important;font-size:12px!important}.god-none{color:#777!important;font-size:9px!important}
+@media(max-width:700px){
+  html[data-orientation="landscape"] .seat .avatar,html[data-orientation="landscape"] .seat .avatar-picker-wrap{width:38px!important;height:38px!important}
+  html[data-orientation="landscape"] .avatar-picker .avatar{width:38px!important;height:38px!important}
+  html[data-orientation="landscape"] .orientation-settings{order:-1!important;margin-left:0!important;margin-right:2px!important;transform:translateX(-4px)}
+  html[data-orientation="landscape"] .orientation-settings-btn{width:38px!important;height:38px!important}
 }
