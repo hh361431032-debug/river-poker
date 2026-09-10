@@ -1,12 +1,15 @@
 {
-  "name": "river-poker",
+  "name": "river-poker-local",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.0-local",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "server": "node server/index.js",
+    "start": "node server/index.js",
+    "local": "npm run build && npm run start"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
