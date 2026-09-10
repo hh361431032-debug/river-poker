@@ -6,7 +6,7 @@
 .seat-cards .card.small{width:29px;height:41px;padding:2px;border-radius:4px}
 .seat-cards .small .card-rank{font-size:10px}.seat-cards .small .card-suit{font-size:13px}
 .seat > small{grid-column:2;grid-row:3;font-size:9px;line-height:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#d8d0bf}
-.seat.turn{background:transparent}.seat.turn .seat-name{color:#f0cf67;text-shadow:0 0 8px rgba(201,162,39,.48);font-weight:700}.seat.folded{opacity:.48}.seat .seat-kick{position:relative;margin-left:4px;width:16px;height:16px}.seat-timer{grid-column:1 / -1;grid-row:1;margin:0 auto 2px;transform:translateY(-2px)}.target-badge{grid-column:1 / -1;justify-self:center;margin-top:2px;font-size:9px;padding:2px 6px;border-radius:999px;background:#c9a227;color:#1e1a17;font-weight:800}
+.seat.turn{background:transparent}.seat.turn .seat-name{color:#e0c46a;text-shadow:0 0 7px rgba(224,196,106,.32)}.seat.folded{opacity:.48}.seat .seat-kick{position:relative;margin-left:4px;width:16px;height:16px}.seat-timer{grid-column:1 / -1;grid-row:1;margin:0 auto 2px;transform:translateY(-2px)}.target-badge{grid-column:1 / -1;justify-self:center;margin-top:2px;font-size:9px;padding:2px 6px;border-radius:999px;background:#c9a227;color:#1e1a17;font-weight:800}
 .poker-table{background:radial-gradient(ellipse at 50% 45%,#2b684f 0%,#1b4939 48%,#0d2921 82%,#071712 100%);border:8px solid #111814;box-shadow:0 14px 34px rgba(0,0,0,.58),inset 0 0 0 2px rgba(201,162,39,.22),inset 0 0 65px rgba(0,0,0,.42)}
 .poker-table:before{content:"";position:absolute;inset:10px;border-radius:50%;border:1px solid rgba(225,193,92,.22);pointer-events:none}
 .card{background:linear-gradient(145deg,#fffdf7,#ece5d4);border:1px solid #c9c0ab;box-shadow:0 4px 9px rgba(0,0,0,.34),inset 0 0 0 1px rgba(255,255,255,.6)}
@@ -34,3 +34,11 @@ html[data-orientation="landscape"],html[data-orientation="landscape"] body,html[
   html:not([data-orientation="landscape"]) .poker-table{width:100%;aspect-ratio:1.18}
   html:not([data-orientation="landscape"]) .dealer-box{transform:scale(.82);margin:-8px auto -2px}
 }
+
+/* Keep the controls immediately below the table and above the log. */
+.table-area{display:flex;flex-direction:column}
+.table-area > .dealer-box{order:1}
+.table-area > .poker-table{order:2}
+.table-area > .interaction-panel{order:3}
+.table-area > .actions{order:4}
+.table-area > .game-log{order:5}
