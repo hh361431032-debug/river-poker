@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 
 const LOCAL_PREFIX = 'river-poker:';
 const notify = () => window.dispatchEvent(new Event('river-poker-storage'));
+const roomCache = new Map();
 
 function localKey(key) { return LOCAL_PREFIX + key; }
 
@@ -23,7 +24,6 @@ function repairTurnState(state) {
   const players = state.players;
   const eligible = p => p && p.inHand && !p.folded && !p.allIn && !p.kicked;
 
-  // Persist the identity of the player whose turn is active. Older rooms may not have it.
   if (!state.turnPlayerName && Number.isInteger(state.turnIndex) && players[state.turnIndex]) {
     state.turnPlayerName = players[state.turnIndex].name;
   }
@@ -32,11 +32,6 @@ function repairTurnState(state) {
     ? players.findIndex(p => p.name === state.turnPlayerName)
     : -1;
 
-  // IMPORTANT: turnIndex can legitimately change after an action. In that case the
-  // previous turn player is still present and eligible, but has already acted. The old
-  // repair logic interpreted turnPlayerName as authoritative and immediately changed
-  // turnIndex back, causing: player A -> player B -> 2s later player A -> infinite loop.
-  // Trust the newly written turnIndex when the named player has already acted.
   if (
     currentIndex >= 0 &&
     Number.isInteger(state.turnIndex) &&
@@ -49,9 +44,6 @@ function repairTurnState(state) {
     return state;
   }
 
-  // When a street advances, resetBets clears hasActed for everyone. The community cards
-  // changing is the reliable signal that this index change is a normal street transition,
-  // not a player leaving before the active player.
   if (
     currentIndex >= 0 &&
     Number.isInteger(state.turnIndex) &&
@@ -66,8 +58,6 @@ function repairTurnState(state) {
     return state;
   }
 
-  // The current player left, was kicked, folded, or went all-in before the next state was saved.
-  // Move directly to the next eligible seat instead of leaving a dead turn index behind.
   if (currentIndex < 0 || !eligible(players[currentIndex])) {
     const start = currentIndex >= 0 ? currentIndex : (Number.isInteger(state.turnIndex) ? state.turnIndex - 1 : -1);
     let next = -1;
@@ -103,7 +93,6 @@ function repairTurnState(state) {
     return state;
   }
 
-  // A player before the active player left. Re-map the index to the same player.
   if (currentIndex !== state.turnIndex) {
     state.turnIndex = currentIndex;
   }
@@ -149,13 +138,31 @@ export const storage = {
 
     if (key.startsWith('poker:room:')) {
       const code = key.slice('poker:room:'.length);
+      const cached = roomCache.get(code);
       const { data, error } = await supabase
         .from('poker_rooms')
         .select('state')
         .eq('code', code)
         .maybeSingle();
       if (error) throw error;
-      return data ? { value: JSON.stringify(repairTurnState(data.state)) } : null;
+      if (!data) {
+        roomCache.delete(code);
+        return null;
+      }
+
+      const remote = repairTurnState(data.state);
+      const remoteStamp = Number(remote?.syncUpdatedAt || 0);
+      const cachedStamp = Number(cached?.syncUpdatedAt || 0);
+
+      // Supabase can briefly return the previous row while a just-finished local write
+      // is propagating through Realtime/polling. Never let that older snapshot overwrite
+      // the state the player has already acted on locally.
+      if (cached && cachedStamp > remoteStamp) {
+        return { value: JSON.stringify(cached) };
+      }
+
+      roomCache.set(code, remote);
+      return { value: JSON.stringify(remote) };
     }
 
     return null;
@@ -205,10 +212,17 @@ export const storage = {
     }
 
     if (key.startsWith('poker:room:')) {
+      const code = key.slice('poker:room:'.length);
       const state = repairTurnState(JSON.parse(value));
       if (state.stage !== 'waiting' && state.stage !== 'handover' && !state.turnPlayerName && Number.isInteger(state.turnIndex) && state.players?.[state.turnIndex]) {
         state.turnPlayerName = state.players[state.turnIndex].name;
       }
+
+      // Monotonic wall-clock stamp lets each tab distinguish its own newer local
+      // state from an older database snapshot arriving just after an action.
+      state.syncUpdatedAt = Date.now();
+      roomCache.set(code, deepCloneRoomState(state));
+
       const meta = roomMetaFromState(state);
       const { error } = await supabase.from('poker_rooms').upsert({
         ...meta,
@@ -237,6 +251,7 @@ export const storage = {
 
     if (key.startsWith('poker:room:')) {
       const code = key.slice('poker:room:'.length);
+      roomCache.delete(code);
       const { error } = await supabase.from('poker_rooms').delete().eq('code', code);
       if (error) throw error;
       notify();
@@ -246,3 +261,7 @@ export const storage = {
     return { success: true };
   },
 };
+
+function deepCloneRoomState(state) {
+  return JSON.parse(JSON.stringify(state));
+}
