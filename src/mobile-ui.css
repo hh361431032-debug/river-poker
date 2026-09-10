@@ -1,0 +1,82 @@
+/* Compact table UI: keep avatar + name + chips/status together and reduce visual clutter. */
+.seat{
+  width:150px;
+  display:grid;
+  grid-template-columns:36px minmax(0,1fr);
+  grid-template-rows:auto auto auto;
+  column-gap:6px;
+  row-gap:2px;
+  align-items:center;
+  text-align:left;
+  padding:4px 6px;
+  border-radius:10px;
+}
+.seat > .avatar,
+.seat > .avatar-picker-wrap{grid-column:1;grid-row:1 / span 3;align-self:center;justify-self:center}
+.seat-name{grid-column:2;grid-row:1;margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:15px}
+.seat-cards{grid-column:2;grid-row:2;justify-content:flex-start;gap:2px;min-width:0}
+.seat-cards .card.small{width:27px;height:38px;padding:2px;border-radius:4px}
+.seat-cards .small .card-rank{font-size:9px}
+.seat-cards .small .card-suit{font-size:12px}
+.seat > small{grid-column:2;grid-row:3;font-size:9px;line-height:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#d8d0bf}
+.seat.turn{background:rgba(201,162,39,.09)}
+.seat.folded{opacity:.48}
+.seat .seat-kick{position:relative;margin-left:4px;width:16px;height:16px}
+.seat-timer{grid-column:1 / -1;grid-row:0;margin:0 auto 2px;transform:translateY(-2px)}
+.target-badge{grid-column:1 / -1;justify-self:center;margin-top:2px;font-size:9px;padding:2px 6px;border-radius:999px;background:#c9a227;color:#1e1a17;font-weight:800}
+
+/* Make the table itself breathe more on phones. */
+@media(max-width:700px){
+  .game-page{padding:6px}
+  .game-top{padding:0 2px;font-size:11px}
+  .poker-table{width:100%;max-width:none;aspect-ratio:1.16;border-width:3px}
+  .seat{width:128px;grid-template-columns:32px minmax(0,1fr);column-gap:5px;padding:3px 4px}
+  .seat .avatar{width:30px!important;height:30px!important}
+  .seat-name{font-size:10px}
+  .seat > small{font-size:8px}
+  .seat-cards .card.small{width:24px;height:34px}
+  .seat-cards .small .card-rank{font-size:8px}
+  .seat-cards .small .card-suit{font-size:10px}
+  .community{gap:2px}
+  .community .card{width:34px;height:49px}
+  .pot{top:28%;padding:4px 9px;font-size:9px}
+  .dealer-box{margin:-12px auto -4px;transform:scale(.76)}
+  .game-log{margin:6px auto;font-size:9px;max-height:62px;overflow:hidden}
+  .interaction-panel{margin-top:6px;padding:6px;font-size:9px}
+  .interaction-panel button{padding:6px 7px;font-size:9px}
+  .actions{margin:7px auto;gap:5px}
+  .actions button{padding:8px 9px;font-size:11px}
+  .actions input{width:82px;padding:8px;font-size:11px}
+  .chat-panel{height:360px}
+}
+
+@media(max-width:420px){
+  .poker-table{aspect-ratio:1.05}
+  .seat{width:112px;grid-template-columns:29px minmax(0,1fr);column-gap:4px}
+  .seat .avatar{width:28px!important;height:28px!important}
+  .seat-name{font-size:9px}
+  .seat > small{font-size:7px}
+  .seat-cards .card.small{width:22px;height:31px}
+  .seat-cards .small .card-rank{font-size:7px}
+  .seat-cards .small .card-suit{font-size:9px}
+  .community .card{width:30px;height:43px}
+  .chat-panel{height:330px}
+}
+
+/* God-view overlay */
+.god-view{position:absolute;left:7px;right:7px;bottom:57px;z-index:50;background:rgba(18,14,11,.98);border:1px solid #d5b75a;border-radius:10px;padding:9px;box-shadow:0 8px 28px rgba(0,0,0,.55);max-height:70vh;overflow-y:auto}
+.god-view-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;color:#d5b75a;font-size:12px;font-weight:700}
+.god-view-head button{background:none;border:0;color:#aaa;cursor:pointer;padding:2px;display:grid;place-items:center}
+.god-title{display:flex;align-items:center;gap:5px}
+.god-section-title{font-size:9px;color:#9f9a8c;text-transform:none;margin:3px 0 5px}
+.god-community{padding:5px 0 8px;border-bottom:1px solid rgba(255,255,255,.08)}
+.god-community-cards{display:flex;gap:4px}
+.god-card{display:inline-flex;align-items:center;justify-content:center;width:32px;height:25px;border-radius:4px;background:#f5f1e8;font-size:12px;font-weight:800;box-shadow:0 2px 5px rgba(0,0,0,.25)}
+.god-card[style*="#777"]{background:#2b2a26!important;color:#777!important}
+.god-players-title{margin-top:8px}
+.god-player{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 2px;border-top:1px solid rgba(255,255,255,.06)}
+.god-player-name{color:#eee;font-size:10px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.god-player-name.folded{color:#777}
+.god-player-cards{display:flex;gap:3px;flex-shrink:0}
+.god-player-cards .god-card{width:30px;height:23px;font-size:11px}
+.god-none{color:#777;font-size:9px}
