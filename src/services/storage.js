@@ -32,6 +32,40 @@ function repairTurnState(state) {
     ? players.findIndex(p => p.name === state.turnPlayerName)
     : -1;
 
+  // IMPORTANT: turnIndex can legitimately change after an action. In that case the
+  // previous turn player is still present and eligible, but has already acted. The old
+  // repair logic interpreted turnPlayerName as authoritative and immediately changed
+  // turnIndex back, causing: player A -> player B -> 2s later player A -> infinite loop.
+  // Trust the newly written turnIndex when the named player has already acted.
+  if (
+    currentIndex >= 0 &&
+    Number.isInteger(state.turnIndex) &&
+    currentIndex !== state.turnIndex &&
+    eligible(players[currentIndex]) &&
+    eligible(players[state.turnIndex]) &&
+    players[currentIndex].hasActed === true
+  ) {
+    state.turnPlayerName = players[state.turnIndex].name;
+    return state;
+  }
+
+  // When a street advances, resetBets clears hasActed for everyone. The community cards
+  // changing is the reliable signal that this index change is a normal street transition,
+  // not a player leaving before the active player.
+  if (
+    currentIndex >= 0 &&
+    Number.isInteger(state.turnIndex) &&
+    currentIndex !== state.turnIndex &&
+    eligible(players[currentIndex]) &&
+    eligible(players[state.turnIndex]) &&
+    Number(state.community?.length || 0) > 0 &&
+    players[currentIndex].hasActed === false &&
+    players[state.turnIndex].hasActed === false
+  ) {
+    state.turnPlayerName = players[state.turnIndex].name;
+    return state;
+  }
+
   // The current player left, was kicked, folded, or went all-in before the next state was saved.
   // Move directly to the next eligible seat instead of leaving a dead turn index behind.
   if (currentIndex < 0 || !eligible(players[currentIndex])) {
