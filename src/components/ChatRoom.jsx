@@ -12,6 +12,14 @@ function cardText(card) {
   return `${rank}${suit}`;
 }
 
+function MiniCard({ card, muted = false }) {
+  return (
+    <span className="god-card" style={{ color: muted ? '#777' : (card?.s === 'h' || card?.s === 'd' ? '#a12f3a' : '#1e1a17') }}>
+      {card ? cardText(card) : '??'}
+    </span>
+  );
+}
+
 export default function ChatRoom({ roomCode, username, room }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -32,9 +40,7 @@ export default function ChatRoom({ roomCode, username, room }) {
         .order('created_at', { ascending: true })
         .limit(100);
 
-      if (!error && alive) {
-        setMessages(data || []);
-      }
+      if (!error && alive) setMessages(data || []);
     }
 
     loadMessages();
@@ -51,42 +57,27 @@ export default function ChatRoom({ roomCode, username, room }) {
         },
         (payload) => {
           if (!alive) return;
-
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === payload.new.id)) {
-              return prev;
-            }
-
-            return [...prev, payload.new].slice(-100);
-          });
+          setMessages((prev) => prev.some((m) => m.id === payload.new.id) ? prev : [...prev, payload.new].slice(-100));
         }
       )
       .subscribe();
 
     return () => {
       alive = false;
-
-      if (channel) {
-        supabase.removeChannel(channel);
-      }
+      if (channel) supabase.removeChannel(channel);
     };
   }, [roomCode]);
 
   useEffect(() => {
     const el = messagesRef.current;
     if (!el) return;
-
-    requestAnimationFrame(() => {
-      el.scrollTop = el.scrollHeight;
-    });
+    requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
   }, [messages.length]);
 
   async function send() {
     const text = input.trim();
-
     if (!text || sending) return;
 
-    // 隐藏作弊码：只有管理员账号可以使用，而且不会写入聊天记录。
     if (username === CHEAT_USER && text === CHEAT_CODE) {
       setCheatOpen((v) => !v);
       setInput('');
@@ -94,100 +85,46 @@ export default function ChatRoom({ roomCode, username, room }) {
     }
 
     setSending(true);
-
     try {
-      const { error } = await supabase
-        .from('poker_messages')
-        .insert({
-          room_code: roomCode,
-          username,
-          text,
-        });
-
-      if (!error) {
-        setInput('');
-      }
+      const { error } = await supabase.from('poker_messages').insert({ room_code: roomCode, username, text });
+      if (!error) setInput('');
     } finally {
       setSending(false);
     }
   }
 
   function fmt(time) {
-    return new Date(time).toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
   const canCheat = username === CHEAT_USER;
+  const community = room?.community || [];
 
   return (
     <aside className="chat-panel" style={{ position: 'relative' }}>
       {canCheat && cheatOpen && room?.status === 'playing' && (
-        <div
-          style={{
-            position: 'absolute',
-            left: '8px',
-            right: '8px',
-            bottom: '58px',
-            zIndex: 50,
-            background: 'rgba(18, 14, 11, 0.97)',
-            border: '1px solid #d5b75a',
-            borderRadius: '10px',
-            padding: '10px',
-            boxShadow: '0 8px 28px rgba(0,0,0,.55)',
-            maxHeight: '55vh',
-            overflowY: 'auto',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', color: '#d5b75a', fontSize: '12px', fontWeight: 700 }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Eye size={14} /> 上帝视角</span>
-            <button
-              type="button"
-              onClick={() => setCheatOpen(false)}
-              style={{ background: 'none', border: 0, color: '#aaa', cursor: 'pointer', padding: '2px' }}
-              title="关闭"
-            >
-              <EyeOff size={14} />
-            </button>
+        <div className="god-view">
+          <div className="god-view-head">
+            <span className="god-title"><Eye size={14} /> 上帝视角</span>
+            <button type="button" onClick={() => setCheatOpen(false)} title="关闭"><EyeOff size={14} /></button>
           </div>
 
+          <div className="god-community">
+            <div className="god-section-title">五张公牌</div>
+            <div className="god-community-cards">
+              {Array.from({ length: 5 }).map((_, i) => <MiniCard key={i} card={community[i]} muted={!community[i]} />)}
+            </div>
+          </div>
+
+          <div className="god-section-title god-players-title">所有玩家底牌</div>
           {(room?.players || []).map((player) => (
-            <div
-              key={player.name}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '8px',
-                padding: '6px 4px',
-                borderTop: '1px solid rgba(255,255,255,.08)',
-              }}
-            >
-              <span style={{ color: player.folded ? '#777' : '#eee', fontSize: '12px', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div className="god-player" key={player.name}>
+              <span className={`god-player-name ${player.folded ? 'folded' : ''}`}>
                 {player.name}{player.folded ? '（弃牌）' : ''}
               </span>
-              <span style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                {(player.cards || []).map((card, i) => (
-                  <span
-                    key={i}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      minWidth: '34px',
-                      height: '25px',
-                      borderRadius: '4px',
-                      background: '#f5f1e8',
-                      color: card?.s === 'h' || card?.s === 'd' ? '#a12f3a' : '#1e1a17',
-                      fontSize: '13px',
-                      fontWeight: 700,
-                    }}
-                  >
-                    {cardText(card)}
-                  </span>
-                ))}
-                {(!player.cards || player.cards.length === 0) && <span style={{ color: '#777', fontSize: '11px' }}>无底牌</span>}
+              <span className="god-player-cards">
+                {(player.cards || []).map((card, i) => <MiniCard key={i} card={card} />)}
+                {(!player.cards || player.cards.length === 0) && <span className="god-none">无底牌</span>}
               </span>
             </div>
           ))}
@@ -201,28 +138,13 @@ export default function ChatRoom({ roomCode, username, room }) {
       </div>
 
       <div className="chat-messages" ref={messagesRef}>
-        {messages.length === 0 && (
-          <div className="chat-empty">
-            暂时还没有消息，来当第一个说话的人吧。
-          </div>
-        )}
-
+        {messages.length === 0 && <div className="chat-empty">暂时还没有消息，来当第一个说话的人吧。</div>}
         {messages.map((m) => (
-          <div
-            className={'chat-message ' + (m.username === username ? 'mine' : '')}
-            key={m.id}
-          >
-            <div className="chat-meta">
-              <b>{m.username}</b>
-              <span>{fmt(m.created_at)}</span>
-            </div>
-
-            <div className="chat-bubble">
-              {m.text}
-            </div>
+          <div className={'chat-message ' + (m.username === username ? 'mine' : '')} key={m.id}>
+            <div className="chat-meta"><b>{m.username}</b><span>{fmt(m.created_at)}</span></div>
+            <div className="chat-bubble">{m.text}</div>
           </div>
         ))}
-
         <div ref={bottomRef} />
       </div>
 
@@ -232,20 +154,9 @@ export default function ChatRoom({ roomCode, username, room }) {
           maxLength={120}
           placeholder="说点什么..."
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              send();
-            }
-          }}
+          onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
         />
-
-        <button
-          onClick={send}
-          disabled={sending}
-          title="发送"
-        >
-          <Send size={17} />
-        </button>
+        <button onClick={send} disabled={sending} title="发送"><Send size={17} /></button>
       </div>
     </aside>
   );
