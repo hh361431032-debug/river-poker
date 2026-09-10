@@ -9,6 +9,8 @@ const lines = {
   handover: "这一局结束啦，祝贺赢家！准备下一局吧。",
 };
 
+const LUNA_IMAGE = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=85";
+
 export default function Dealer({ room, dealing }) {
   const [text, setText] = useState(lines.waiting);
 
@@ -23,11 +25,20 @@ export default function Dealer({ room, dealing }) {
   return (
     <div className="dealer-box">
       <div className={`dealer-avatar ${dealing ? "dealing" : ""}`}>
-        <div className="dealer-hair"></div>
-        <div className="dealer-face">♥</div>
-        <div className="dealer-body">
-          <span className="dealer-bow">♠</span>
-        </div>
+        <img
+          src={LUNA_IMAGE}
+          alt="Luna 荷官"
+          style={{
+            width: "88px",
+            height: "105px",
+            objectFit: "cover",
+            objectPosition: "center 25%",
+            borderRadius: "48% 48% 38% 38%",
+            border: "2px solid #d5b75a",
+            boxShadow: "0 4px 14px #0009",
+            display: "block",
+          }}
+        />
       </div>
       <div className="dealer-info">
         <div className="dealer-name"><span className="live-dot"></span> Luna · 荷官</div>
