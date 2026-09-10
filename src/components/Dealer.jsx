@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Camera } from "lucide-react";
+import { Camera, Settings, Smartphone, RotateCcw } from "lucide-react";
 import { storage } from "../services/storage";
 
 const lines = {
@@ -38,6 +38,45 @@ function compressDealerImage(file) {
     };
     reader.readAsDataURL(file);
   });
+}
+
+function OrientationSettings() {
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState(() => {
+    try { return localStorage.getItem("poker:orientation") || "portrait"; } catch { return "portrait"; }
+  });
+
+  useEffect(() => {
+    document.documentElement.dataset.orientation = mode;
+    try { localStorage.setItem("poker:orientation", mode); } catch {}
+    return () => {
+      delete document.documentElement.dataset.orientation;
+    };
+  }, [mode]);
+
+  const choose = value => {
+    setMode(value);
+    setOpen(false);
+  };
+
+  return (
+    <div className="orientation-settings">
+      <button className="orientation-settings-btn" type="button" title="屏幕方向" onClick={() => setOpen(v => !v)}>
+        <Settings size={16} />
+      </button>
+      {open && (
+        <div className="orientation-menu">
+          <div className="orientation-title">桌面方向</div>
+          <button className={mode === "portrait" ? "active" : ""} onClick={() => choose("portrait")}>
+            <Smartphone size={15} />竖屏
+          </button>
+          <button className={mode === "landscape" ? "active" : ""} onClick={() => choose("landscape")}>
+            <RotateCcw size={15} />横屏
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function Dealer({ room, dealing, username }) {
@@ -87,6 +126,7 @@ export default function Dealer({ room, dealing, username }) {
 
   return (
     <div className="dealer-box">
+      <OrientationSettings />
       <div className={`dealer-avatar ${dealing ? "dealing" : ""}`} style={{ position: "relative" }}>
         <img
           src={currentImage}
