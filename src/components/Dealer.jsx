@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { Camera } from "lucide-react";
+import { storage } from "../services/storage";
 
 const lines = {
   waiting: "欢迎来到河畔牌局，等大家到齐我们就开始。",
@@ -9,10 +11,52 @@ const lines = {
   handover: "这一局结束啦，祝贺赢家！准备下一局吧。",
 };
 
-const LUNA_IMAGE = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=85";
+const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=85";
 
-export default function Dealer({ room, dealing }) {
+function compressDealerImage(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type.startsWith("image/")) return reject(new Error("请选择图片文件"));
+    if (file.size > 8 * 1024 * 1024) return reject(new Error("图片不能超过 8MB"));
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("图片读取失败"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("图片格式无法读取"));
+      img.onload = () => {
+        const max = 512;
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.86));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+export default function Dealer({ room, dealing, username }) {
   const [text, setText] = useState(lines.waiting);
+  const [image, setImage] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const inputRef = useRef(null);
+  const isAdmin = username === "RiverAdmin";
+
+  useEffect(() => {
+    let alive = true;
+    storage.getDealerImage().then(url => {
+      if (alive) setImage(url || DEFAULT_IMAGE);
+    }).catch(() => {
+      if (alive) setImage(DEFAULT_IMAGE);
+    });
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     if (dealing) {
@@ -22,11 +66,30 @@ export default function Dealer({ room, dealing }) {
     setText(lines[room?.stage] || lines.waiting);
   }, [room?.stage, dealing, room?.handNumber]);
 
+  const pickImage = async e => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !isAdmin) return;
+    setError("");
+    setUploading(true);
+    try {
+      const data = await compressDealerImage(file);
+      await storage.setDealerImage(data);
+      setImage(data);
+    } catch (err) {
+      setError(err.message || "荷官照片上传失败");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const currentImage = image || DEFAULT_IMAGE;
+
   return (
     <div className="dealer-box">
-      <div className={`dealer-avatar ${dealing ? "dealing" : ""}`}>
+      <div className={`dealer-avatar ${dealing ? "dealing" : ""}`} style={{ position: "relative" }}>
         <img
-          src={LUNA_IMAGE}
+          src={currentImage}
           alt="Luna 荷官"
           style={{
             width: "88px",
@@ -39,10 +102,39 @@ export default function Dealer({ room, dealing }) {
             display: "block",
           }}
         />
+        {isAdmin && (
+          <>
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              disabled={uploading}
+              title="更换荷官照片"
+              style={{
+                position: "absolute",
+                right: "-4px",
+                bottom: "-4px",
+                width: "28px",
+                height: "28px",
+                borderRadius: "50%",
+                border: "2px solid #17130f",
+                background: "#d5b75a",
+                color: "#17130f",
+                display: "grid",
+                placeItems: "center",
+                cursor: uploading ? "wait" : "pointer",
+                padding: 0,
+              }}
+            >
+              <Camera size={14} />
+            </button>
+            <input ref={inputRef} type="file" accept="image/*" onChange={pickImage} hidden />
+          </>
+        )}
       </div>
       <div className="dealer-info">
         <div className="dealer-name"><span className="live-dot"></span> Luna · 荷官</div>
         <div className="dealer-text">{text}</div>
+        {isAdmin && <div style={{ fontSize: "10px", opacity: 0.65, marginTop: "3px" }}>{uploading ? "正在更新照片…" : error || "管理员：点击相机更换照片"}</div>}
       </div>
       <div className="dealer-card-stack">
         <div className="mini-card"></div>
