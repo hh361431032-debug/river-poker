@@ -3,6 +3,7 @@ import { supabase } from './supabase';
 const LOCAL_PREFIX = 'river-poker:';
 const notify = () => window.dispatchEvent(new Event('river-poker-storage'));
 const roomCache = new Map();
+let dealerImageCache = null;
 
 function localKey(key) { return LOCAL_PREFIX + key; }
 
@@ -16,8 +17,6 @@ function roomMetaFromState(state) {
   };
 }
 
-// Keep the logical current player by name instead of relying only on an array index.
-// This makes turn state survive a player being removed from the middle of the array.
 function repairTurnState(state) {
   if (!state || !Array.isArray(state.players) || state.stage === 'waiting' || state.stage === 'handover') return state;
 
@@ -154,9 +153,6 @@ export const storage = {
       const remoteStamp = Number(remote?.syncUpdatedAt || 0);
       const cachedStamp = Number(cached?.syncUpdatedAt || 0);
 
-      // Supabase can briefly return the previous row while a just-finished local write
-      // is propagating through Realtime/polling. Never let that older snapshot overwrite
-      // the state the player has already acted on locally.
       if (cached && cachedStamp > remoteStamp) {
         return { value: JSON.stringify(cached) };
       }
@@ -184,6 +180,29 @@ export const storage = {
       .update({ avatar_url: avatarUrl || null })
       .eq('username', username);
     if (error) throw error;
+    notify();
+    return { success: true };
+  },
+
+  async getDealerImage() {
+    if (dealerImageCache !== null) return dealerImageCache;
+    const { data, error } = await supabase
+      .from('poker_users')
+      .select('dealer_image_url')
+      .eq('username', 'RiverAdmin')
+      .maybeSingle();
+    if (error) throw error;
+    dealerImageCache = data?.dealer_image_url || null;
+    return dealerImageCache;
+  },
+
+  async setDealerImage(imageUrl) {
+    const { error } = await supabase
+      .from('poker_users')
+      .update({ dealer_image_url: imageUrl || null })
+      .eq('username', 'RiverAdmin');
+    if (error) throw error;
+    dealerImageCache = imageUrl || null;
     notify();
     return { success: true };
   },
@@ -218,8 +237,6 @@ export const storage = {
         state.turnPlayerName = state.players[state.turnIndex].name;
       }
 
-      // Monotonic wall-clock stamp lets each tab distinguish its own newer local
-      // state from an older database snapshot arriving just after an action.
       state.syncUpdatedAt = Date.now();
       roomCache.set(code, deepCloneRoomState(state));
 
