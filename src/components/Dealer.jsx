@@ -46,7 +46,7 @@ export default function Dealer({ room, dealing, username }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const inputRef = useRef(null);
-  const isAdmin = username === "RiverAdmin";
+  const canChangeImage = username === "莫拉咕" || room?.hostName === username;
 
   useEffect(() => {
     let alive = true;
@@ -69,7 +69,7 @@ export default function Dealer({ room, dealing, username }) {
   const pickImage = async e => {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file || !isAdmin) return;
+    if (!file || !canChangeImage) return;
     setError("");
     setUploading(true);
     try {
@@ -90,7 +90,7 @@ export default function Dealer({ room, dealing, username }) {
       <div className={`dealer-avatar ${dealing ? "dealing" : ""}`} style={{ position: "relative" }}>
         <img
           src={currentImage}
-          alt="Luna 荷官"
+          alt="荷官"
           style={{
             width: "88px",
             height: "105px",
@@ -102,7 +102,7 @@ export default function Dealer({ room, dealing, username }) {
             display: "block",
           }}
         />
-        {isAdmin && (
+        {canChangeImage && (
           <>
             <button
               type="button"
@@ -134,7 +134,7 @@ export default function Dealer({ room, dealing, username }) {
       <div className="dealer-info">
         <div className="dealer-name"><span className="live-dot"></span> Luna · 荷官</div>
         <div className="dealer-text">{text}</div>
-        {isAdmin && <div style={{ fontSize: "10px", opacity: 0.65, marginTop: "3px" }}>{uploading ? "正在更新照片…" : error || "管理员：点击相机更换照片"}</div>}
+        {canChangeImage && <div style={{ fontSize: "10px", opacity: 0.65, marginTop: "3px" }}>{uploading ? "正在更新照片…" : error || "房主：点击相机更换荷官照片"}</div>}
       </div>
       <div className="dealer-card-stack">
         <div className="mini-card"></div>
