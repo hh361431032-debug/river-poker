@@ -202,6 +202,10 @@ function serveStatic(req, res, url) {
 
 const port = Number(process.env.PORT || 8787);
 const server = http.createServer((req, res) => {
+  const startedAt = Date.now();
+  const client = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '-';
+  console.log(`[${new Date().toISOString()}] ${client} ${req.method} ${req.url}`);
+  res.on('finish', () => console.log(`  -> ${res.statusCode} ${res.getHeader('content-type') || '-'} ${Date.now() - startedAt}ms`));
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   if (url.pathname.startsWith('/api/')) return handleApi(req, res, url);
   if (req.method === 'GET' || req.method === 'HEAD') return serveStatic(req, res, url);
